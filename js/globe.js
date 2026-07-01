@@ -1,317 +1,214 @@
 /**
- * Interactive 3D Globe — Social Science Gallery
- * HGIS UW-inspired dark, minimalist style.
- * Strictly accurate continent outlines from Natural Earth 110m data,
- * uniform land color, no country boundaries.
+ * Interactive Orthographic Globe — Social Science Gallery
+ * Strict imitation of the HGIS UW homepage globe.
+ * D3 orthographic projection, light paper-map palette,
+ * single continuous landmass, subtle graticule, study-area marker.
  */
 (function() {
     const STUDY_AREA = { lat: 21.55, lng: 107.97, name: 'Dongxing\u2013M\u00f3ng C\u00e1i' };
     const DATA_URL = 'data/world.json';
 
-    // HGIS UW-inspired palette
-    const OCEAN_COLOR = 0x111a25;
-    const LAND_COLOR = 0xc9b99a;
-    const OUTLINE_COLOR = 0xa8997a;
-    const GRATICULE_COLOR = 0x3a4a5a;
-
-    let scene, camera, renderer, globe, markerGroup;
-    let isUserInteracting = false;
-    let targetRotX = 0, targetRotY = 0;
-    let mouseX0 = 0, mouseY0 = 0;
-    let autoRotate = true;
-    let resumeTimer = null;
+    // HGIS UW exact palette
+    const SPHERE_FILL = '#ddd4c2';
+    const LAND_FILL = '#f5efe2';
+    const RULE = '#d6cdbf';
+    const RULE_SOFT = '#e9e2d4';
+    const MARKER_HALO = '#a08e6f';
+    const MARKER_CORE = '#6a5a6e';
 
     const container = document.getElementById('globe-canvas');
     if (!container) return;
 
-    initScene();
-    loadWorldData().then(buildGlobe).catch(function(err) {
-        console.error('Failed to load world data:', err);
+    const wrap = container.parentElement;
+
+    function measure() {
+        var w = wrap.clientWidth;
+        // Match HGIS responsive height behavior
+        var h = Math.min(560, Math.max(360, w));
+        return { w: w, h: h };
+    }
+
+    var dims = measure();
+    var w = dims.w, h = dims.h;
+    var radius = Math.min(w, h) * 0.46;
+
+    var svg = d3.select(container)
+        .append('svg')
+        .attr('width', w)
+        .attr('height', h)
+        .attr('viewBox', '0 0 ' + w + ' ' + h)
+        .style('display', 'block')
+        .style('width', '100%')
+        .style('height', 'auto')
+        .style('overflow', 'visible');
+
+    // Initial rotation toward study area (not dead-center)
+    var initialRotate = [-STUDY_AREA.lng + 25, -STUDY_AREA.lat * 0.6, 0];
+
+    var projection = d3.geoOrthographic()
+        .scale(radius)
+        .translate([w / 2, h / 2])
+        .rotate(initialRotate)
+        .clipAngle(90);
+
+    var path = d3.geoPath(projection);
+
+    // Defs: radial sphere shade
+    var defs = svg.append('defs');
+    var grad = defs.append('radialGradient')
+        .attr('id', 'sphere-shade')
+        .attr('cx', '35%')
+        .attr('cy', '35%')
+        .attr('r', '70%');
+    grad.append('stop').attr('offset', '0%').attr('stop-color', 'rgba(255,255,255,0.18)');
+    grad.append('stop').attr('offset', '60%').attr('stop-color', 'rgba(255,255,255,0)');
+    grad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(58,42,38,0.10)');
+
+    // Layers
+    var gSphere = svg.append('g');
+    var gGraticule = svg.append('g');
+    var gLand = svg.append('g');
+    var gPoints = svg.append('g');
+
+    gSphere.append('circle')
+        .attr('cx', w / 2)
+        .attr('cy', h / 2)
+        .attr('r', radius)
+        .attr('fill', SPHERE_FILL)
+        .attr('stroke', RULE)
+        .attr('stroke-width', 1);
+
+    gSphere.append('circle')
+        .attr('cx', w / 2)
+        .attr('cy', h / 2)
+        .attr('r', radius)
+        .attr('fill', 'url(#sphere-shade)')
+        .attr('pointer-events', 'none');
+
+    var graticule = d3.geoGraticule10();
+    var landFeature = null;
+
+    fetch(DATA_URL)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            landFeature = landmassToFeature(data.landmass);
+            render();
+        })
+        .catch(function(err) {
+            console.error('Failed to load world data:', err);
+        });
+
+    function landmassToFeature(landmass) {
+        // Convert our compact landmass polygons into a GeoJSON MultiPolygon
+        var polys = [];
+        landmass.forEach(function(poly) {
+            if (poly.type === 'Polygon') {
+                polys.push(poly.coords);
+            } else if (poly.type === 'MultiPolygon') {
+                polys = polys.concat(poly.coords);
+            }
+        });
+        return { type: 'MultiPolygon', coordinates: polys };
+    }
+
+    function render() {
+        gGraticule.selectAll('path').data([graticule]).join('path')
+            .attr('d', path)
+            .attr('fill', 'none')
+            .attr('stroke', RULE_SOFT)
+            .attr('stroke-width', 0.6)
+            .attr('opacity', 0.55);
+
+        if (landFeature) {
+            gLand.selectAll('path').data([landFeature]).join('path')
+                .attr('d', path)
+                .attr('fill', LAND_FILL)
+                .attr('stroke', RULE)
+                .attr('stroke-width', 0.4);
+        }
+
+        var pt = [STUDY_AREA.lng, STUDY_AREA.lat];
+        var r = projection.rotate();
+        var center = [-r[0], -r[1]];
+        var visible = d3.geoDistance(pt, center) < Math.PI / 2 - 0.02;
+        var c = projection(pt);
+
+        var pointGroup = gPoints.selectAll('g.pt').data([STUDY_AREA]);
+        var enter = pointGroup.enter().append('g').attr('class', 'pt');
+        enter.append('circle').attr('class', 'halo').attr('r', 7);
+        enter.append('circle').attr('class', 'core').attr('r', 3);
+
+        pointGroup.merge(enter)
+            .attr('transform', function() {
+                if (!c || !visible) return 'translate(-9999,-9999)';
+                return 'translate(' + c[0] + ',' + c[1] + ')';
+            })
+            .attr('opacity', visible ? 1 : 0);
+
+        enter.select('.halo').attr('fill', 'none').attr('stroke', MARKER_HALO).attr('stroke-width', 1.5);
+        enter.select('.core').attr('fill', MARKER_CORE);
+    }
+
+    // Auto-rotate
+    var autoRotate = true;
+    var hoverInside = false;
+    var lastT = 0;
+    var timer = d3.timer(function(t) {
+        if (!autoRotate) { lastT = t; return; }
+        var dt = t - lastT;
+        lastT = t;
+        if (!landFeature) return;
+        var r = projection.rotate();
+        var speed = hoverInside ? 0.003 : 0.012;
+        projection.rotate([r[0] + dt * speed, r[1], r[2]]);
+        render();
     });
 
-    function initScene() {
-        var w = container.clientWidth, h = container.clientHeight;
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
-        camera.position.z = 3.1;
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(w, h);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        container.appendChild(renderer.domElement);
+    // Cursor-aware slowdown
+    wrap.addEventListener('pointerenter', function() { hoverInside = true; });
+    wrap.addEventListener('pointerleave', function() { hoverInside = false; });
 
-        // Soft ambient light only — no harsh directional shadows
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        var rim = new THREE.DirectionalLight(0xaaccff, 0.2);
-        rim.position.set(-5, 2, 5);
-        scene.add(rim);
+    // Drag to rotate
+    var dragStart = null;
+    svg.call(
+        d3.drag()
+            .on('start', function(event) {
+                autoRotate = false;
+                dragStart = { x: event.x, y: event.y, rot: projection.rotate() };
+                container.style.cursor = 'grabbing';
+            })
+            .on('drag', function(event) {
+                if (!dragStart) return;
+                var dx = event.x - dragStart.x;
+                var dy = event.y - dragStart.y;
+                var k = 0.4;
+                var newRot = [
+                    dragStart.rot[0] + dx * k,
+                    Math.max(-85, Math.min(85, dragStart.rot[1] - dy * k)),
+                    dragStart.rot[2]
+                ];
+                projection.rotate(newRot);
+                render();
+            })
+            .on('end', function() {
+                dragStart = null;
+                container.style.cursor = 'grab';
+                setTimeout(function() { autoRotate = true; }, 1800);
+            })
+    );
 
-        globe = new THREE.Group();
-        scene.add(globe);
+    // Responsive
+    var ro = new ResizeObserver(function() {
+        var m = measure();
+        if (m.w === w && m.h === h) return;
+        w = m.w; h = m.h;
+        radius = Math.min(w, h) * 0.46;
+        svg.attr('width', w).attr('height', h).attr('viewBox', '0 0 ' + w + ' ' + h);
+        projection.scale(radius).translate([w / 2, h / 2]);
+        gSphere.selectAll('circle')
+            .attr('cx', w / 2).attr('cy', h / 2).attr('r', radius);
+        render();
+    });
+    ro.observe(wrap);
 
-        createBaseSphere();
-        createGraticule();
-        createAtmosphere();
-        createStars();
-        createMarker();
-
-        // Initial rotation toward study area
-        var phi = (90 - STUDY_AREA.lat) * Math.PI / 180;
-        var theta = (STUDY_AREA.lng + 180) * Math.PI / 180;
-        targetRotX = -(theta - Math.PI);
-        targetRotY = -(phi - Math.PI / 2) * 0.2;
-
-        container.addEventListener('mousedown', onDown);
-        container.addEventListener('mousemove', onMove);
-        container.addEventListener('mouseup', onUp);
-        container.addEventListener('mouseleave', onUp);
-        container.addEventListener('wheel', onWheel, { passive: false });
-        container.addEventListener('touchstart', onTouchStart, { passive: false });
-        container.addEventListener('touchmove', onTouchMove, { passive: false });
-        container.addEventListener('touchend', onUp);
-        window.addEventListener('resize', onResize);
-
-        animate();
-    }
-
-    function loadWorldData() {
-        return fetch(DATA_URL).then(function(r) { return r.json(); });
-    }
-
-    function buildGlobe(data) {
-        // 1. Continuous landmass fill — uniform warm color, no gaps
-        var landPositions = [];
-        data.landmass.forEach(function(poly) {
-            if (poly.type === 'Polygon') {
-                triangulateRing(poly.coords[0], landPositions, 1.0008);
-            } else if (poly.type === 'MultiPolygon') {
-                poly.coords.forEach(function(p) { triangulateRing(p[0], landPositions, 1.0008); });
-            }
-        });
-        if (landPositions.length > 0) {
-            var landGeo = new THREE.BufferGeometry();
-            landGeo.setAttribute('position', new THREE.Float32BufferAttribute(landPositions, 3));
-            landGeo.computeVertexNormals();
-            var landMat = new THREE.MeshLambertMaterial({
-                color: LAND_COLOR,
-                transparent: true,
-                opacity: 0.9,
-                side: THREE.DoubleSide
-            });
-            var landMesh = new THREE.Mesh(landGeo, landMat);
-            landMesh.name = 'landmass-fill';
-            globe.add(landMesh);
-        }
-
-        // 2. Strictly accurate continent outlines — no country boundaries
-        var outlinePositions = [];
-        Object.keys(data.continents).forEach(function(name) {
-            var cont = data.continents[name];
-            cont.polygons.forEach(function(poly) {
-                appendPolygonOutline(poly.coords, poly.type, outlinePositions, 1.0016);
-            });
-        });
-        if (outlinePositions.length > 0) {
-            var outlineGeo = new THREE.BufferGeometry();
-            outlineGeo.setAttribute('position', new THREE.Float32BufferAttribute(outlinePositions, 3));
-            var outlineMat = new THREE.LineBasicMaterial({
-                color: OUTLINE_COLOR,
-                transparent: true,
-                opacity: 0.55
-            });
-            globe.add(new THREE.LineSegments(outlineGeo, outlineMat));
-        }
-    }
-
-    function triangulateRing(ring, positions, radius) {
-        if (ring.length < 3) return;
-        var cx = 0, cy = 0, cz = 0;
-        for (var i = 0; i < ring.length; i++) {
-            var v = ll2v(ring[i][1], ring[i][0], radius);
-            cx += v.x; cy += v.y; cz += v.z;
-        }
-        var c = new THREE.Vector3(cx, cy, cz).normalize().multiplyScalar(radius);
-        for (var j = 0; j < ring.length - 1; j++) {
-            var a = ll2v(ring[j][1], ring[j][0], radius);
-            var b = ll2v(ring[j + 1][1], ring[j + 1][0], radius);
-            positions.push(c.x, c.y, c.z, a.x, a.y, a.z, b.x, b.y, b.z);
-        }
-    }
-
-    function appendPolygonOutline(coords, type, arr, radius) {
-        var polys = type === 'Polygon' ? [coords] : coords;
-        for (var p = 0; p < polys.length; p++) {
-            var rings = polys[p];
-            // Only draw outer rings; skip holes (lakes) for a clean HGIS look
-            var ring = rings[0];
-            for (var i = 0; i < ring.length - 1; i++) {
-                var a = ll2v(ring[i][1], ring[i][0], radius);
-                var b = ll2v(ring[i + 1][1], ring[i + 1][0], radius);
-                arr.push(a.x, a.y, a.z, b.x, b.y, b.z);
-            }
-        }
-    }
-
-    function createBaseSphere() {
-        var geo = new THREE.SphereGeometry(0.999, 64, 64);
-        var mat = new THREE.MeshPhongMaterial({
-            color: OCEAN_COLOR,
-            specular: 0x050505,
-            shininess: 4
-        });
-        globe.add(new THREE.Mesh(geo, mat));
-    }
-
-    function createGraticule() {
-        var g = new THREE.Group();
-        var r = 1.0005;
-        var mat = new THREE.LineBasicMaterial({ color: GRATICULE_COLOR, transparent: true, opacity: 0.12 });
-
-        for (var lat = -60; lat <= 60; lat += 30) {
-            var pts = [];
-            for (var lng = -180; lng <= 180; lng += 5) pts.push(ll2v(lat, lng, r));
-            g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
-        }
-        for (var lng2 = -180; lng2 < 180; lng2 += 30) {
-            var pts2 = [];
-            for (var lat2 = -90; lat2 <= 90; lat2 += 5) pts2.push(ll2v(lat2, lng2, r));
-            g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts2), mat));
-        }
-        globe.add(g);
-    }
-
-    function createMarker() {
-        markerGroup = new THREE.Group();
-        var pos = ll2v(STUDY_AREA.lat, STUDY_AREA.lng, 1.012);
-
-        // Core dot
-        var pin = new THREE.Mesh(
-            new THREE.SphereGeometry(0.022, 16, 16),
-            new THREE.MeshBasicMaterial({ color: 0xffa94d })
-        );
-        pin.position.copy(pos);
-        markerGroup.add(pin);
-
-        // Inner ring
-        var ring1 = new THREE.Mesh(
-            new THREE.RingGeometry(0.028, 0.038, 32),
-            new THREE.MeshBasicMaterial({ color: 0xffa94d, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
-        );
-        ring1.position.copy(pos);
-        ring1.lookAt(new THREE.Vector3(0, 0, 0));
-        markerGroup.add(ring1);
-
-        // Pulsing outer ring
-        var ring2 = new THREE.Mesh(
-            new THREE.RingGeometry(0.045, 0.055, 32),
-            new THREE.MeshBasicMaterial({ color: 0xffa94d, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
-        );
-        ring2.position.copy(pos);
-        ring2.lookAt(new THREE.Vector3(0, 0, 0));
-        ring2.userData.isPulse = true;
-        markerGroup.add(ring2);
-
-        var label = makeLabel(STUDY_AREA.name);
-        label.position.copy(pos.clone().multiplyScalar(1.09));
-        label.scale.set(0.32, 0.08, 1);
-        markerGroup.add(label);
-
-        globe.add(markerGroup);
-    }
-
-    function createAtmosphere() {
-        var geo = new THREE.SphereGeometry(1.11, 64, 64);
-        var mat = new THREE.ShaderMaterial({
-            vertexShader: 'varying vec3 vN; void main(){vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-            fragmentShader: 'varying vec3 vN; void main(){float i=pow(0.62-dot(vN,vec3(0,0,1.0)),2.8);gl_FragColor=vec4(0.45,0.65,0.85,1.0)*i*0.22;}',
-            blending: THREE.AdditiveBlending,
-            side: THREE.BackSide,
-            transparent: true
-        });
-        scene.add(new THREE.Mesh(geo, mat));
-    }
-
-    function createStars() {
-        var geo = new THREE.BufferGeometry();
-        var pos = [];
-        for (var i = 0; i < 1600; i++) {
-            var r = 40 + Math.random() * 30;
-            var t = Math.random() * Math.PI * 2;
-            var p = Math.acos(2 * Math.random() - 1);
-            pos.push(r * Math.sin(p) * Math.cos(t), r * Math.sin(p) * Math.sin(t), r * Math.cos(p));
-        }
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.11, transparent: true, opacity: 0.45 })));
-    }
-
-    function ll2v(lat, lng, r) {
-        var phi = (90 - lat) * Math.PI / 180;
-        var theta = (lng + 180) * Math.PI / 180;
-        return new THREE.Vector3(
-            -(r * Math.sin(phi) * Math.cos(theta)),
-            r * Math.cos(phi),
-            r * Math.sin(phi) * Math.sin(theta)
-        );
-    }
-
-    function makeLabel(text) {
-        var canvas = document.createElement('canvas');
-        canvas.width = 512; canvas.height = 128;
-        var ctx = canvas.getContext('2d');
-        ctx.font = '600 38px "Source Sans Pro", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.fillText(text, 257, 66);
-        ctx.fillStyle = 'rgba(234,230,222,0.75)';
-        ctx.fillText(text, 256, 64);
-        var tex = new THREE.CanvasTexture(canvas);
-        var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-        var sp = new THREE.Sprite(mat);
-        sp.scale.set(0.36, 0.09, 1);
-        return sp;
-    }
-
-    function pauseAuto() { autoRotate = false; if (resumeTimer) clearTimeout(resumeTimer); }
-    function scheduleResume() { if (resumeTimer) clearTimeout(resumeTimer); resumeTimer = setTimeout(function() { autoRotate = true; }, 2000); }
-
-    function onDown(e) { isUserInteracting = true; pauseAuto(); mouseX0 = e.clientX; mouseY0 = e.clientY; }
-    function onMove(e) {
-        if (!isUserInteracting) return;
-        targetRotX += (e.clientX - mouseX0) * 0.005;
-        targetRotY += (e.clientY - mouseY0) * 0.003;
-        targetRotY = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, targetRotY));
-        mouseX0 = e.clientX; mouseY0 = e.clientY;
-    }
-    function onUp() { isUserInteracting = false; scheduleResume(); }
-    function onTouchStart(e) { if (e.touches.length === 1) { isUserInteracting = true; pauseAuto(); mouseX0 = e.touches[0].clientX; mouseY0 = e.touches[0].clientY; } }
-    function onTouchMove(e) {
-        if (!isUserInteracting || e.touches.length !== 1) return;
-        e.preventDefault();
-        targetRotX += (e.touches[0].clientX - mouseX0) * 0.005;
-        targetRotY += (e.touches[0].clientY - mouseY0) * 0.003;
-        targetRotY = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, targetRotY));
-        mouseX0 = e.touches[0].clientX; mouseY0 = e.touches[0].clientY;
-    }
-    function onWheel(e) { e.preventDefault(); camera.position.z = Math.max(1.8, Math.min(5, camera.position.z + e.deltaY * 0.002)); }
-    function onResize() { var w = container.clientWidth, h = container.clientHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h); }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        if (autoRotate && !isUserInteracting) targetRotX += 0.001;
-        globe.rotation.y += (targetRotX - globe.rotation.y) * 0.05;
-        globe.rotation.x += (targetRotY - globe.rotation.x) * 0.05;
-
-        if (markerGroup) {
-            var t = Date.now() * 0.003;
-            for (var i = 0; i < markerGroup.children.length; i++) {
-                var c = markerGroup.children[i];
-                if (c.userData && c.userData.isPulse) {
-                    var s = 1 + Math.sin(t) * 0.35;
-                    c.scale.set(s, s, s);
-                    c.material.opacity = 0.3 * (1 - Math.sin(t) * 0.4);
-                }
-            }
-        }
-        renderer.render(scene, camera);
-    }
 })();
