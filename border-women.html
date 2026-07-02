@@ -48,19 +48,13 @@
     <section id="story-section" class="story-section">
         <div class="section-header">
             <h2>The Story of Invisible Labor</h2>
-            <p>Turn the pages to follow the layers of women's hidden labor at the border.</p>
+            <p>Scroll down to follow the layers of women's hidden labor at the border.</p>
         </div>
 
-        <div class="book-container">
-            <div class="book-controls">
-                <button class="book-btn book-prev" id="prevPage" disabled>&larr; Previous</button>
-                <span class="book-progress" id="pageIndicator">Page 1 of 6</span>
-                <button class="book-btn book-next" id="nextPage">Next &rarr;</button>
-            </div>
-
-            <div class="book-pages" id="bookPages">
+        <div class="story-container">
+            <div class="story-chapters">
                 <!-- Page 1: Setting the Scene -->
-                <div class="book-page active" data-page="1">
+                <article class="story-chapter">
                     <div class="page-content">
                         <div class="page-text">
                             <h3>Chapter 1: Crossing the River</h3>
@@ -73,10 +67,10 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </article>
 
                 <!-- Page 2: Administrative Labor -->
-                <div class="book-page" data-page="2">
+                <article class="story-chapter">
                     <div class="page-content">
                         <div class="page-text">
                             <h3>Chapter 2: The Weight of Papers</h3>
@@ -93,10 +87,10 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </article>
 
                 <!-- Page 3: Reproductive & Care Labor -->
-                <div class="book-page" data-page="3">
+                <article class="story-chapter">
                     <div class="page-content">
                         <div class="page-text">
                             <h3>Chapter 3: Caring Across Borders</h3>
@@ -106,10 +100,10 @@
                             <p class="page-quote">"I wake at 5 AM to prepare food for my mother-in-law, then take the children to school, then cross the bridge to check on my own mother in Móng Cái. By noon I haven't started my own work yet."<br><span class="quote-attr">— Interviewee, Vietnamese woman, Dongxing market vendor, 2024</span></p>
                         </div>
                     </div>
-                </div>
+                </article>
 
                 <!-- Page 4: Risk & Emotional Labor -->
-                <div class="book-page" data-page="4">
+                <article class="story-chapter">
                     <div class="page-content">
                         <div class="page-text">
                             <h3>Chapter 4: Living with Uncertainty</h3>
@@ -123,10 +117,10 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </article>
 
                 <!-- Page 5: Voices from Huaxi Community -->
-                <div class="book-page" data-page="5">
+                <article class="story-chapter">
                     <div class="page-content">
                         <div class="page-text">
                             <h3>Chapter 5: Voices from Huaxi Community</h3>
@@ -145,10 +139,10 @@
                             <span class="img-caption">At the China-Vietnam (Dongxing) Offshore Talent Innovation and Entrepreneurship Base, where cross-border professional opportunities are reshaping women's economic roles.</span>
                         </div>
                     </div>
-                </div>
+                </article>
 
                 <!-- Page 6: Agency & Differentiation -->
-                <div class="book-page" data-page="6">
+                <article class="story-chapter">
                     <div class="page-content">
                         <div class="page-text">
                             <h3>Chapter 6: Not One Story, But Many</h3>
@@ -164,10 +158,10 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </article>
 
                 <!-- Page 7: Gendered Friction -->
-                <div class="book-page" data-page="7">
+                <article class="story-chapter">
                     <div class="page-content">
                         <div class="page-photo-grid">
                             <img src="images/fieldwork-a-trade-space.png" alt="Border trade service space at Dongxing">
@@ -183,7 +177,7 @@
                             <p>Gendered friction is not merely an academic concept. It is a call to make visible what has been rendered invisible—to count the uncounted costs of borders borne by women's bodies, time, and emotional reserves.</p>
                         </div>
                     </div>
-                </div>
+                </article>
             </div>
         </div>
     </section>
@@ -257,34 +251,7 @@
         });
     });
 
-    // Book page turning
-    const pages = document.querySelectorAll('.book-page');
-    const prevBtn = document.getElementById('prevPage');
-    const nextBtn = document.getElementById('nextPage');
-    const indicator = document.getElementById('pageIndicator');
-    let currentPage = 1;
-    const totalPages = pages.length;
-
-    function showPage(n) {
-        pages.forEach(p => p.classList.remove('active', 'exit-left', 'exit-right'));
-        const target = document.querySelector('[data-page="' + n + '"]');
-        if (target) {
-            target.classList.add('active');
-        }
-        currentPage = n;
-        prevBtn.disabled = (n === 1);
-        nextBtn.disabled = (n === totalPages);
-        indicator.textContent = 'Page ' + n + ' of ' + totalPages;
-    }
-
-    prevBtn.addEventListener('click', () => { if (currentPage > 1) showPage(currentPage - 1); });
-    nextBtn.addEventListener('click', () => { if (currentPage < totalPages) showPage(currentPage + 1); });
-
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowLeft' && currentPage > 1) showPage(currentPage - 1);
-        if (e.key === 'ArrowRight' && currentPage < totalPages) showPage(currentPage + 1);
-    });
+    // Story chapters are displayed as a continuous vertical scroll.
     </script>
 </body>
 </html>
