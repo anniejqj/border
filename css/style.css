@@ -470,6 +470,46 @@ body {
 .site-footer a { color: var(--accent); text-decoration: none; }
 .site-footer a:hover { text-decoration: underline; }
 
+/* References & Acknowledgements */
+.references-section,
+.acknowledgements-section {
+    padding: 3rem 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+.references-section { background: #f7f5f0; border-top: 1px solid var(--card-border); }
+.acknowledgements-section { background: #f4f1ea; border-top: 1px solid var(--card-border); }
+.references-content,
+.acknowledgements-content { max-width: 720px; margin: 0 auto; }
+.references-content h2,
+.acknowledgements-content h2 {
+    font-family: var(--serif);
+    font-size: 1.6rem;
+    margin-bottom: 1.2rem;
+    color: var(--ink);
+}
+.reference-list {
+    list-style: none;
+    padding: 0;
+}
+.reference-list li {
+    font-family: var(--body-serif);
+    font-size: 0.9rem;
+    line-height: 1.65;
+    margin-bottom: 0.85rem;
+    padding-left: 1.5rem;
+    text-indent: -1.5rem;
+    color: #3a3a3a;
+}
+.reference-list li em { font-style: italic; }
+.acknowledgements-content p {
+    font-family: var(--body-serif);
+    font-size: 0.95rem;
+    line-height: 1.75;
+    margin-bottom: 0.9rem;
+    color: #3a3a3a;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
     .project-card { grid-template-columns: 1fr; }
